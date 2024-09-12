@@ -1,0 +1,111 @@
+# Welcome to serverless. Read the docs
+# https://serverless.com/framework/docs/
+
+# Serverless.yml is the configuration the CLI
+# uses to deploy your code to your provider of choice
+service: todo-api
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+frameworkVersion: "3"
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${sls:stage}
+    DYNAMODB_ENDPOINT: ${env:DYNAMODB_ENDPOINT}
+  httpApi:
+    cors: true
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - "dynamodb:PutItem"
+            - "dynamodb:GetItem"
+            - "dynamodb:DeleteItem"
+            - "dynamodb:Scan"
+            - "dynamodb:Query"
+          Resource: "arn:aws:dynamodb:${aws:region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+functions:
+  createTodoItem:
+    handler: src/create.handler
+    events:
+      - httpApi:
+          path: /task
+          method: post
+    
+  listAllTodoItem:
+    handler: src/list.handler
+    events:
+      - httpApi:
+          path: /tasks
+          method: get
+  
+  getTodoItem:
+    handler: src/get.handler
+    events:
+      - httpApi:
+          path: /tasks/{id}
+          method: get
+
+  deleteTodoItem:
+    handler: src/delete.handler
+    events:
+      - httpApi:
+          path: /tasks/{id}
+          method: delete
+
+  updateTodoItem:
+    handler: src/update.handler
+    events:
+      - httpApi:
+          path: /tasks/{id}
+          method: put
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-dotenv-plugin
+  - serverless-dynamodb
+  - serverless-offline
+
+resources:
+  Resources:
+    TodosTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: tasks
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        AttributeDefinitions:
+          - AttributeName: todoID
+            AttributeType: S
+        KeySchema:
+          - AttributeName: todoID
+            KeyType: HASH
+
+custom:
+  serverless-dynamodb:
+    stages:
+      - dev
+    start:
+      docker: true
+      port: 8002
+      inMemory: true
+      heapInitial: 200m
+      heapMax: 1g
+      migrate: true
+      seed: true
+      convertEmptyValues: true
+    migration:
+      dir: offline/migrations
+  esbuild:
+    watch:
+      pattern: 
+        - 'src/**/*.ts'
+
